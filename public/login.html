@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Panel de avance · Entrar</title>
+  <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <div class="login-wrap">
+    <form class="login reveal" method="post" action="/login" autocomplete="off">
+      <a class="brand" href="/">
+        <img class="logo" src="/logo.svg" alt="tekras" width="136" height="30">
+      </a>
+      <p class="eyebrow">Panel de avance</p>
+      <h1>Acceso de supervisión</h1>
+      <p>Introduce la clave de acceso para ver el plan de trabajo y su estado real.</p>
+      <div class="field">
+        <label for="key">Clave de acceso</label>
+        <input id="key" name="key" type="password" required autofocus>
+      </div>
+      <button class="btn primary" type="submit">Entrar
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
+      <div class="err" id="err" role="alert"></div>
+    </form>
+  </div>
+  <script src="/login.js"></script>
+</body>
+</html>

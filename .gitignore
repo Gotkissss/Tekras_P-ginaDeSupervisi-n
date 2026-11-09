@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.*
+!.env.example
+data/
+railway-variables.env
+.claude/
+design-v1/
+.DS_Store
