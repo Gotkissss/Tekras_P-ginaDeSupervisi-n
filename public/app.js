@@ -40,6 +40,7 @@
   const plural = (n, a, b) => `${n} ${n === 1 ? a : b}`;
 
   // ---------- Modelo ----------
+  const isAssigned = (t) => !!state.data?.assigned?.includes(t.id);
   const due = (t) => t.endDate || t.date;
   const tagsOf = (t) => (t.tags.length ? t.tags : [NO_TAG]);
   function status(t, today) {
@@ -108,7 +109,54 @@
     renderCalendar(tasks, today);
     $('#logout').hidden = !d.authEnabled;
     $('#role-pill').hidden = !(d.authEnabled && d.role === 'owner');
+    $('#hero-actions').hidden = !d.canAssign;
   }
+
+  // ---------- Asignar tarea (jefe) ----------
+  const dlg = $('#assign-dlg');
+  let toastTimer;
+  function toast(msg) {
+    const t = $('#toast');
+    t.textContent = msg;
+    t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; }, 5000);
+  }
+  $('#assign-btn').addEventListener('click', () => {
+    const d = state.data;
+    $('#assign-sub').textContent = `Aparecerá en el plan de Notion de ${d.owner} y le avisará por Telegram.`;
+    const sel = $('#a-tag');
+    sel.innerHTML = '<option value="">Sin área</option>' + (d.areas || []).map((a) => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
+    const date = $('#a-date');
+    date.min = d.today;
+    if (!date.value || date.value < d.today) date.value = d.today;
+    $('#assign-err').textContent = '';
+    dlg.showModal();
+    $('#a-title').focus();
+  });
+  $('#assign-cancel').addEventListener('click', () => dlg.close());
+  $('#assign-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.currentTarget;
+    // (form.title es el atributo del formulario, por eso se leen los campos por id)
+    const body = { title: $('#a-title').value, date: $('#a-date').value, tag: $('#a-tag').value, note: $('#a-note').value };
+    if (!body.title.trim()) { $('#assign-err').textContent = 'Escribe qué tarea necesitas.'; return; }
+    const btn = $('#assign-submit');
+    btn.disabled = true;
+    btn.textContent = 'Asignando…';
+    try {
+      await postJSON('/api/tasks/create', body);
+      dlg.close();
+      f.reset();
+      toast(`✓ Tarea asignada a ${state.data.owner}. Ya la tiene en su plan.`);
+      await load(false);
+    } catch (err) {
+      if (err.message !== 'auth') $('#assign-err').textContent = err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Asignar tarea';
+    }
+  });
 
   // ---------- Conexión / jornada ----------
   const TG_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.4 4.2 2.9 11.3c-1.3.5-1.2 1.2-.2 1.5l4.7 1.5 1.8 5.6c.2.6.1.9.8.9.5 0 .7-.2 1-.5l2.3-2.2 4.8 3.5c.9.5 1.5.2 1.7-.8l3.1-14.7c.3-1.3-.5-1.9-1.5-1.4zM8.6 14l9.6-6.1c.5-.3.9-.1.5.2l-8.2 7.4-.3 3.4L8.6 14z"/></svg>';
@@ -421,7 +469,7 @@
       ${stBox(s)}
       <div class="t">
         <div class="name" title="${esc(t.title)}">${esc(t.title)}</div>
-        <div class="meta">${tagsOf(t).map(tagChip).join('')}</div>
+        <div class="meta">${tagsOf(t).map(tagChip).join('')}${isAssigned(t) ? '<span class="by-boss">📝 De tu jefe</span>' : ''}</div>
       </div>
       <span class="when">${whenText || ''}</span>
     </li>`;
@@ -548,7 +596,8 @@
     const cls = s === 'today' ? 'todo' : s;
     const label = { done: 'Completada', late: 'Atrasada', today: 'Pendiente (hoy)', todo: 'Planificada' }[s];
     const tag = tagsOf(t)[0];
-    return `<div class="ev ${cls}" style="${tagVars(tag)}" data-tip-k="${esc(tagsOf(t).join(' · '))} · ${label}" data-tip="${esc(t.title)}">${icon}<span class="tx">${esc(t.title)}</span></div>`;
+    const boss = isAssigned(t);
+    return `<div class="ev ${cls}${boss ? ' boss' : ''}" style="${tagVars(tag)}" data-tip-k="${esc(tagsOf(t).join(' · '))} · ${label}${boss ? ' · asignada por tu jefe' : ''}" data-tip="${esc(t.title)}">${icon}<span class="tx">${boss ? '📝 ' : ''}${esc(t.title)}</span></div>`;
   }
 
   function renderCalendar(tasks, today) {

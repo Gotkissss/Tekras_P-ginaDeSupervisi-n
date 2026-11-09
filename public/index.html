@@ -34,7 +34,45 @@
       <h1 id="title"><span class="skeleton">Avance de …</span></h1>
       <p class="lede" id="lede"><span class="skeleton">Cargando el plan desde Notion…</span></p>
       <div class="banner" id="banner" hidden></div>
+      <div class="hero-actions" id="hero-actions" hidden>
+        <button class="btn primary big" id="assign-btn" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Asignar una tarea
+        </button>
+        <span class="hint">Le llega al instante a su Notion y por Telegram.</span>
+      </div>
     </section>
+
+    <dialog class="dlg" id="assign-dlg" aria-labelledby="assign-title">
+      <form id="assign-form" method="dialog" novalidate>
+        <h2 id="assign-title">Asignar una tarea</h2>
+        <p class="dlg-sub" id="assign-sub">Aparecerá en su plan de Notion y le avisará por Telegram.</p>
+        <div class="field">
+          <label for="a-title">¿Qué necesitas?</label>
+          <input id="a-title" name="title" maxlength="200" required placeholder="Ej. Enviar el informe de ZTNA al cliente">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="a-date">¿Para cuándo?</label>
+            <input id="a-date" name="date" type="date" required>
+          </div>
+          <div class="field">
+            <label for="a-tag">Área</label>
+            <select id="a-tag" name="tag"></select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="a-note">Detalles <span class="opt">(opcional)</span></label>
+          <textarea id="a-note" name="note" rows="3" maxlength="1500" placeholder="Contexto, enlaces o lo que deba tener en cuenta"></textarea>
+        </div>
+        <div class="err" id="assign-err" role="alert"></div>
+        <div class="dlg-actions">
+          <button class="btn" type="button" id="assign-cancel">Cancelar</button>
+          <button class="btn primary" type="submit" id="assign-submit">Asignar tarea</button>
+        </div>
+      </form>
+    </dialog>
+    <div class="toast" id="toast" role="status" hidden></div>
 
     <section class="card presence" id="presence" aria-live="polite" hidden>
       <div class="pr-top">

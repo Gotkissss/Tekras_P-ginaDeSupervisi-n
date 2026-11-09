@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadFromNotion } from './lib/notion.js';
+import { loadFromNotion, createTask } from './lib/notion.js';
 import { loadDemo } from './lib/demo.js';
 import { createStore } from './lib/store.js';
 import { createTelegram } from './lib/telegram.js';
@@ -43,7 +43,8 @@ const cfg = {
   cacheMs: (Number(env.CACHE_SECONDS) || 60) * 1000,
   dataDir: path.resolve(ROOT, env.DATA_DIR || 'data'),
   visitGapMs: (Number(env.VISIT_GAP_MINUTES) || 30) * 60000,
-  telegramToken: env.TELEGRAM_BOT_TOKEN || '',
+  // TELEGRAM_DISABLED=1 apaga el bot (útil en local mientras Railway lo usa).
+  telegramToken: env.TELEGRAM_DISABLED === '1' ? '' : env.TELEGRAM_BOT_TOKEN || '',
   telegramChat: env.TELEGRAM_CHAT_ID || '',
 };
 const authEnabled = !!(cfg.accessKey || cfg.ownerKey);
@@ -154,6 +155,48 @@ function presence(role) {
   if (role !== 'owner') { delete out.telegram.error; delete out.telegram.configured; }
   if (role === 'owner') out.visits = store.state.visits.slice(-12).reverse();
   return out;
+}
+
+// --- Tareas asignadas por el jefe ---
+// Áreas que el jefe puede elegir: las de Notion menos las excluidas (o solo las incluidas).
+function allowedAreas(tagColors = {}) {
+  return Object.keys(tagColors).filter((g) =>
+    cfg.includeTags.length ? cfg.includeTags.includes(g) : !cfg.excludeTags.includes(g));
+}
+const longDate = (iso) => new Intl.DateTimeFormat('es-HN', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' })
+  .format(new Date(iso + 'T12:00:00Z'));
+const createLog = []; // marcas de tiempo para limitar a 20 tareas por hora
+
+async function assignTask(input) {
+  const title = String(input.title || '').replace(/\s+/g, ' ').trim();
+  const date = String(input.date || '');
+  const tag = String(input.tag || '').trim();
+  const note = String(input.note || '').trim();
+  if (!title) throw Object.assign(new Error('Escribe qué tarea necesitas.'), { status: 400 });
+  if (title.length > 200) throw Object.assign(new Error('El título es muy largo (máximo 200 caracteres).'), { status: 400 });
+  if (note.length > 1500) throw Object.assign(new Error('La nota es muy larga (máximo 1500 caracteres).'), { status: 400 });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < todayIn() || date > addDaysIso(todayIn(), 366)) {
+    throw Object.assign(new Error('Elige una fecha desde hoy en adelante.'), { status: 400 });
+  }
+  const c = await getData();
+  if (tag && !allowedAreas(c.data?.tagColors).includes(tag)) throw Object.assign(new Error('Área no válida.'), { status: 400 });
+  const now = Date.now();
+  while (createLog.length && now - createLog[0] > 3600000) createLog.shift();
+  if (createLog.length >= 20) throw Object.assign(new Error('Demasiadas tareas en poco tiempo. Intenta más tarde.'), { status: 429 });
+
+  const { id } = await createTask(cfg, { title, date, tag, note, by: 'tu jefe' });
+  createLog.push(now);
+  store.state.bossTasks.push({ id, at: new Date(now).toISOString(), title, date });
+  store.save();
+  await getData(true); // que aparezca de inmediato en el panel
+  telegram.notify('owner', `📝 Tu jefe te asignó una tarea:\n«${title}»\n📅 ${longDate(date)}${tag ? ` · ${tag}` : ''}${note ? `\n💬 ${note}` : ''}`);
+  console.log('Tarea asignada por el jefe:', id);
+  return { id };
+}
+function addDaysIso(iso, n) {
+  const d = new Date(iso + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
 }
 
 // --- Tareas completadas (aviso al jefe) ---
@@ -374,8 +417,25 @@ const server = http.createServer(async (req, res) => {
         authEnabled,
         role,
         presence: presence(role),
+        assigned: store.state.bossTasks.map((t) => t.id),
+        areas: allowedAreas(c.data.tagColors),
+        canAssign: role === 'boss' && !cfg.demo,
         ...c.data,
       });
+    }
+
+    if (p === '/api/tasks/create' && req.method === 'POST') {
+      if (role !== 'boss') return json(res, 403, { error: 'Solo tu jefe puede asignar tareas desde el panel.' });
+      if (!sameOrigin(req)) return json(res, 403, { error: 'Origen no permitido.' });
+      if (cfg.demo) return json(res, 400, { error: 'No disponible en modo demo.' });
+      let body = {};
+      try { body = JSON.parse(await readBody(req, 8192) || '{}'); } catch {}
+      try {
+        return json(res, 200, await assignTask(body));
+      } catch (e) {
+        console.error('No se pudo crear la tarea:', e.message);
+        return json(res, e.status && e.status < 500 ? e.status : 502, { error: e.message });
+      }
     }
 
     if (p === '/api/presence' && req.method === 'GET') {

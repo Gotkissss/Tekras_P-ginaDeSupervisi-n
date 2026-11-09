@@ -40,6 +40,13 @@ Con tu clave aparece el botón **Iniciar jornada / Terminar jornada**. Tu jefe v
 desde qué hora, y la entrada, salida y horas de cada día de la semana. Si olvidas marcar la salida, ese día queda
 como «Sin salida marcada». Se guarda en `DATA_DIR/state.json` (por defecto `data/`).
 
+## Tareas asignadas por el jefe
+
+Con su clave, tu jefe ve el botón **Asignar una tarea** (título, fecha, área y detalles opcionales).
+La tarea se crea directamente en la base de Notion, aparece en el panel con la etiqueta «📝 De tu jefe»
+y te llega un aviso por Telegram. Requiere que la integración de Notion tenga la capacidad
+**Insert content** (notion.so/profile/integrations → tu integración → Capabilities).
+
 ## Avisos por Telegram
 
 1. En Telegram abre **@BotFather** → `/newbot` → ponle nombre (ej. *Tekras Avance*) y un usuario que termine en `bot`.
@@ -50,7 +57,8 @@ como «Sin salida marcada». Se guarda en `DATA_DIR/state.json` (por defecto `da
 - Tu jefe puede vincularse desde su panel y recibirá un aviso cuando **inicies tu jornada** y cada vez que
   **marques una tarea como completada** en Notion (se revisa cada `WATCH_MINUTES`, 2 por defecto).
 - Los mensajes llegan a la app de Telegram en el teléfono y en la computadora a la vez.
-- Solo un proceso puede leer el bot a la vez: si el panel corre en Railway, apaga la copia local (o usa otro bot).
+- Solo un proceso puede leer el bot a la vez. Para probar en local mientras Railway está activo, pon
+  `TELEGRAM_DISABLED=1` en tu `.env` local (el bot queda apagado solo en tu PC).
 
 ## Railway
 
