@@ -211,9 +211,13 @@
     if (isOwner) {
       const v = p.visits || [];
       const visits = v.slice(0, 5).map((x) => `${relDay(localDate(x.at), today)} ${tf.format(new Date(x.at))}`).join(' · ');
-      const tgTxt = !tg.available ? 'Telegram: falta configurar el bot (TELEGRAM_BOT_TOKEN).'
-        : tg.linked ? 'Recibes un aviso en Telegram con cada visita.' : 'Activa Telegram para recibir un aviso con cada visita.';
-      foot.innerHTML = `👀 <b>Visitas de tu jefe:</b> ${v.length ? visits : 'todavía no ha abierto el panel.'}<br><span>${tgTxt} Esto solo lo ves tú.</span>`;
+      let tgTxt;
+      if (!tg.configured) tgTxt = 'Telegram: falta el token del bot (TELEGRAM_BOT_TOKEN).';
+      else if (!tg.available) tgTxt = `<span class="tg-err">⚠ El bot no pudo iniciar: ${esc(tg.error || 'error desconocido')}. Revisa TELEGRAM_BOT_TOKEN.</span>`;
+      else if (!tg.linked) tgTxt = 'Telegram aún no está vinculado en este servidor: pulsa «Recibir avisos en Telegram».';
+      else tgTxt = `Recibes un aviso en Telegram con cada visita. <button class="linkbtn" id="tg-test" type="button">Enviar aviso de prueba</button>`;
+      if (tg.available && tg.error) tgTxt += `<br><span class="tg-err">⚠ Último problema del bot: ${esc(tg.error)}</span>`;
+      foot.innerHTML = `👀 <b>Visitas de tu jefe:</b> ${v.length ? visits : 'todavía no ha abierto el panel.'}<br><span>${tgTxt}</span><br><span class="muted-s">Esto solo lo ves tú.</span>`;
     }
   }
 
@@ -233,6 +237,20 @@
       if (res.ok) { state.presence = await res.json(); renderPresence(); }
     } catch {}
   }
+
+  $('#pr-foot').addEventListener('click', async (e) => {
+    const b = e.target.closest('#tg-test');
+    if (!b) return;
+    b.disabled = true;
+    b.textContent = 'Enviando…';
+    try {
+      await postJSON('/api/telegram/test');
+      b.textContent = '✓ Enviado, revisa Telegram';
+    } catch (err) {
+      if (err.message !== 'auth') { b.textContent = 'No se pudo enviar'; alert(`No se pudo enviar el aviso: ${err.message}`); }
+    }
+    setTimeout(pollPresence, 4000);
+  });
 
   $('#clock-btn').addEventListener('click', async (e) => {
     const btn = e.currentTarget;

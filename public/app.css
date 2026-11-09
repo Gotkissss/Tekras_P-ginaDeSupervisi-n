@@ -174,6 +174,10 @@ h2 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
 .pr-foot { margin-top: 14px; padding: 12px 14px; border-radius: 11px; background: var(--surface-2); border: 1px solid var(--line); font-size: 14px; color: var(--text-2); }
 .pr-foot[hidden] { display: none; }
 .pr-foot b { color: var(--text); font-weight: 650; }
+.pr-foot .tg-err { color: var(--warn); font-weight: 600; }
+.pr-foot .muted-s { color: var(--muted); font-size: 12.5px; }
+.linkbtn { background: none; border: 0; padding: 0; margin-left: 6px; color: var(--accent); font-weight: 650; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.linkbtn[disabled] { color: var(--muted); cursor: default; text-decoration: none; }
 
 /* ---------- KPIs ---------- */
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }

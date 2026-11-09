@@ -75,6 +75,14 @@ const telegram = createTelegram({
       ? '✅ Listo. Te avisaré aquí cada vez que tu jefe abra el panel de avance.'
       : `✅ Listo. Te avisaré aquí cuando ${cfg.owner} inicie su jornada y cada vez que complete una tarea.`,
   },
+  // Si te vinculas mientras tu jefe tiene el panel abierto, te avisa en ese momento.
+  onLinked: (role) => {
+    if (role !== 'owner') return;
+    const v = store.state.visits.at(-1);
+    if (v && Date.now() - Date.parse(v.last) < 2 * 60000) {
+      telegram.notify('owner', `👀 Tu jefe tiene el panel de avance abierto en este momento (entró a las ${hhmm(v.at)}).`);
+    }
+  },
 });
 telegram.start();
 
@@ -143,6 +151,7 @@ function presence(role) {
     serverNow: new Date().toISOString(),
     telegram: telegram.status(role),
   };
+  if (role !== 'owner') { delete out.telegram.error; delete out.telegram.configured; }
   if (role === 'owner') out.visits = store.state.visits.slice(-12).reverse();
   return out;
 }
@@ -182,10 +191,11 @@ setTimeout(() => watchCompletions().catch((e) => console.error('watch:', e.messa
 setInterval(() => watchCompletions().catch((e) => console.error('watch:', e.message)), WATCH_MS);
 
 // --- Visitas del jefe (aviso a ti) ---
-function trackBossVisit() {
+// force = true cuando tu jefe acaba de iniciar sesión: siempre cuenta como visita nueva.
+function trackBossVisit(force = false) {
   const now = Date.now();
   const v = store.state.visits.at(-1);
-  if (v && now - Date.parse(v.last) < cfg.visitGapMs) {
+  if (!force && v && now - Date.parse(v.last) < cfg.visitGapMs) {
     // Misma visita: solo se actualiza el último movimiento (como mucho cada minuto).
     if (now - Date.parse(v.last) > 60000) { v.last = new Date(now).toISOString(); store.save(); }
     return;
@@ -329,6 +339,7 @@ const server = http.createServer(async (req, res) => {
       const role = keyMatches(key, cfg.ownerKey) ? 'owner' : keyMatches(key, cfg.accessKey) ? 'boss' : null;
       if (role) {
         attempts.delete(ip);
+        if (role === 'boss') trackBossVisit(true);
         const secure = isHttps(req) ? '; Secure' : '';
         return redirect(res, '/', {
           'Set-Cookie': `${COOKIE}=${makeSession(role)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 86400}${secure}`,
@@ -395,6 +406,11 @@ const server = http.createServer(async (req, res) => {
       const link = telegram.createLink(role);
       if (!link) return json(res, 409, { error: 'El bot de Telegram todavía no está configurado.' });
       return json(res, 200, { ...link, bot: telegram.username });
+    }
+    if (p === '/api/telegram/test' && req.method === 'POST') {
+      if (!sameOrigin(req)) return json(res, 403, { error: 'Origen no permitido.' });
+      const r = await telegram.test(role);
+      return json(res, r.ok ? 200 : 409, r);
     }
     if (p === '/api/telegram/unlink' && req.method === 'POST') {
       if (!sameOrigin(req)) return json(res, 403, { error: 'Origen no permitido.' });
