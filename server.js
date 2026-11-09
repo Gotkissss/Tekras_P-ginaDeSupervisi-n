@@ -2,7 +2,7 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadFromNotion, createTask } from './lib/notion.js';
@@ -12,6 +12,17 @@ import { createTelegram } from './lib/telegram.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(ROOT, 'public');
+
+// Versión del frontend = huella de los archivos de public/. Cambia en cada despliegue con cambios
+// y se agrega a las URLs (app.js?v=…) para que ni Cloudflare ni el navegador sirvan código viejo.
+const BUILD = (() => {
+  const h = crypto.createHash('sha1');
+  for (const f of readdirSync(PUBLIC).sort()) {
+    try { h.update(f); h.update(readFileSync(path.join(PUBLIC, f))); } catch {}
+  }
+  return h.digest('hex').slice(0, 10);
+})();
+const VERSIONED = /(src|href)="\/(app\.js|app\.css|login\.js|favicon\.svg|logo\.svg)(\?v=[^"]*)?"/g;
 
 // --- .env local (en Railway las variables vienen del panel) ---
 const envFile = path.join(ROOT, '.env');
@@ -150,6 +161,7 @@ function presence(role) {
   const out = {
     online, since: online ? s.start : null, sessions,
     serverNow: new Date().toISOString(),
+    build: BUILD,
     telegram: telegram.status(role),
   };
   if (role !== 'owner') { delete out.telegram.error; delete out.telegram.configured; }
@@ -347,8 +359,14 @@ async function serveFile(res, rel, status = 200) {
   const file = path.normalize(path.join(PUBLIC, rel));
   if (!file.startsWith(PUBLIC + path.sep)) return send(res, 404, 'No encontrado');
   try {
+    const ext = path.extname(file);
+    if (ext === '.html') {
+      // El HTML nunca se guarda en caché y apunta a la versión actual de JS/CSS.
+      const html = (await readFile(file, 'utf8')).replace(VERSIONED, (_, attr, name) => `${attr}="/${name}?v=${BUILD}"`);
+      return send(res, status, html, TYPES['.html'], { 'Cache-Control': 'no-store' });
+    }
     const buf = await readFile(file);
-    send(res, status, buf, TYPES[path.extname(file)] || 'application/octet-stream', { 'Cache-Control': 'no-cache' });
+    send(res, status, buf, TYPES[ext] || 'application/octet-stream', { 'Cache-Control': 'no-cache' });
   } catch {
     send(res, 404, 'No encontrado');
   }
@@ -420,6 +438,7 @@ const server = http.createServer(async (req, res) => {
         assigned: store.state.bossTasks.map((t) => t.id),
         areas: allowedAreas(c.data.tagColors),
         canAssign: role === 'boss' && !cfg.demo,
+        build: BUILD,
         ...c.data,
       });
     }

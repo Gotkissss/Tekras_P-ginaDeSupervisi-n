@@ -39,6 +39,18 @@
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const plural = (n, a, b) => `${n} ${n === 1 ? a : b}`;
 
+  // ---------- Versión publicada ----------
+  // Si el servidor ya corre una versión nueva, recarga la página para usar el código nuevo
+  // (excepto mientras el formulario de asignar tarea está abierto).
+  function checkBuild(build) {
+    if (!build) return false;
+    if (!state.build) { state.build = build; return false; }
+    if (build === state.build) return false;
+    if (document.querySelector('#assign-dlg')?.open) return false;
+    location.reload();
+    return true;
+  }
+
   // ---------- Modelo ----------
   const isAssigned = (t) => !!state.data?.assigned?.includes(t.id);
   const due = (t) => t.endDate || t.date;
@@ -74,6 +86,7 @@
       if (res.status === 401) { location.href = '/login'; return; }
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || 'Error');
+      if (checkBuild(body.build)) return;
       state.data = body;
       state.presence = body.presence;
       if (!state.month) state.month = body.today.slice(0, 7);
@@ -282,7 +295,12 @@
     try {
       const res = await fetch('/api/presence', { cache: 'no-store' });
       if (res.status === 401) { location.href = '/login'; return; }
-      if (res.ok) { state.presence = await res.json(); renderPresence(); }
+      if (res.ok) {
+        const p = await res.json();
+        if (checkBuild(p.build)) return;
+        state.presence = p;
+        renderPresence();
+      }
     } catch {}
   }
 
@@ -375,7 +393,7 @@
       b.textContent = 'Modo demo: estos son datos de ejemplo. Configura NOTION_TOKEN y NOTION_DATABASE_ID para ver el plan real.';
     } else b.hidden = true;
 
-    $('#foot-src').textContent = d.source === 'demo' ? 'fuente: demo' : `fuente: Notion · ${d.databaseTitle}`;
+    $('#foot-src').textContent = (d.source === 'demo' ? 'fuente: demo' : `fuente: Notion · ${d.databaseTitle}`) + (d.build ? ` · versión ${d.build}` : '');
     updateSync();
   }
 
